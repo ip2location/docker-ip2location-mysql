@@ -35,4 +35,4 @@ This is a pre-configured, ready-to-run MySQL server with IP2Location Geolocation
     
 ### Sample Code Reference
 
-http://www.ip2location.com/tutorials
+[http://www.ip2location.com/tutorials](http://www.ip2location.com/tutorials)
