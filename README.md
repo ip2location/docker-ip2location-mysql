@@ -32,3 +32,7 @@ This is a pre-configured, ready-to-run MySQL server with IP2Location Geolocation
 ### Make the query
 
     mysql -u admin -pYOUR_MYSQL_PASSWORD -h ip2location-db ip2location_database -e 'SELECT * FROM `ip2location_database` WHERE INET_ATON("8.8.8.8") <= ip_to LIMIT 1'
+    
+### Sample Code Reference
+
+http://www.ip2location.com/tutorials
