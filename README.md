@@ -1,11 +1,11 @@
 docker-ip2location-mysql
 ========================
 
-This is a pre-configured, ready-to-run MySQL server with IP2Location Geolocation database setup scripts. It simplifies the development team to install and set up the geolocation database in MySQL server. The setup script supports the [commercial database packages](http://www.ip2location.com) and [free LITE package](http://lite.ip2location.com). Please register for a download account before running this image.
+This is a pre-configured, ready-to-run MySQL server with IP2Location Geolocation database setup scripts. It simplifies the development team to install and set up the geolocation database in MySQL server. The setup script supports the [commercial database packages](https://www.ip2location.com) and [free LITE package](https://lite.ip2location.com). Please register for a download account before running this image.
 
 ### Usage
 
-1. Run this image as daemon with your username, password, and download code registered from [IP2Location](http://www.ip2location.com).
+1. Run this image as daemon with your username, password, and download code registered from [IP2Location](https://www.ip2location.com).
 
         docker run --name ip2location -d -e MYSQL_PASSWORD=YOUR_MYSQL_PASSWORD -e USERNAME=YOUR_USERNAME -e PASSWORD=YOUR_PASSWORD -e CODE=DOWNLOAD_CODE ip2location/mysql
 
@@ -35,4 +35,4 @@ This is a pre-configured, ready-to-run MySQL server with IP2Location Geolocation
     
 ### Sample Code Reference
 
-[http://www.ip2location.com/tutorials](http://www.ip2location.com/tutorials)
+[https://www.ip2location.com/tutorials](https://www.ip2location.com/tutorials)
