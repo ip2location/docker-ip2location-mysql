@@ -1,10 +1,9 @@
-FROM debian:wheezy
+FROM debian:stretch-slim
 MAINTAINER IP2Location <support@ip2location.com>
 
 # Install packages
 ENV DEBIAN_FRONTEND noninteractive
-RUN apt-get update && \
-  apt-get -yq install mysql-server wget unzip
+RUN apt-get update && apt-get -yq install apt-utils mysql-server wget unzip
 
 # Add MySQL configuration
 ADD custom.cnf /etc/mysql/conf.d/custom.cnf
@@ -14,10 +13,8 @@ ADD run.sh /run.sh
 RUN chmod 755 /*.sh
 
 # Exposed ENV
-ENV USERNAME FALSE
-ENV PASSWORD FALSE
+ENV TOKEN FALSE
 ENV CODE FALSE
-ENV MYSQL_PASSWORD FALSE
 
 # Add VOLUMEs
 VOLUME  ["/etc/mysql", "/var/lib/mysql"]
