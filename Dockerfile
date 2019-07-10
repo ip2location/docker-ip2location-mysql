@@ -3,10 +3,10 @@ MAINTAINER IP2Location <support@ip2location.com>
 
 # Install packages
 ENV DEBIAN_FRONTEND noninteractive
-RUN apt-get update && apt-get -yq install apt-utils mysql-server wget unzip
+RUN apt update && apt -qy install apt-utils mysql-server wget unzip
 
 # Add MySQL configuration
-ADD custom.cnf /etc/mysql/conf.d/custom.cnf
+ADD custom.cnf /etc/mysql/mariadb.conf.d/999-custom.cnf
 
 # Add MySQL scripts
 ADD run.sh /run.sh
@@ -19,5 +19,5 @@ ENV CODE FALSE
 # Add VOLUMEs
 VOLUME  ["/etc/mysql", "/var/lib/mysql"]
 
-EXPOSE 3306
+EXPOSE 3306 33060
 CMD ["/run.sh"]
