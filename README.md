@@ -28,7 +28,7 @@ This is a pre-configured, ready-to-run MySQL server with IP2Location Geolocation
 	
     docker run --link ip2location:ip2location-db -t -i application_using_the_ip2location_data
 	
-Please note that `--link` flag has become the legacy feature of Docker and may eventually be removed. Please use the network bridge to link containers for query.
+Please note that `--link` flag has become the legacy feature of Docker and may eventually be removed. Please use the network bridge to link containers for query. You can read this article of How to connect [IP2Location MySQL docker in Debian container](https://blog.ip2location.com/knowledge-base/how-to-connect-ip2location-mysql-docker-in-debian-container/) to learn more.
 
 ### Query for IP information
 
