@@ -49,16 +49,16 @@ echo -n " > Decompress downloaded package "
 
 unzip -q -o database.zip
 
-if [ "$CODE" == "DB1CSV" ]; then
+if [ "$CODE" == "DB1" ]; then
 	CSV="$(find . -name 'IPCountry.csv')"
 
-elif [ "$CODE" == "DB2CSV" ]; then
+elif [ "$CODE" == "DB2" ]; then
 	CSV="$(find . -name 'IPISP.csv')"
 
 elif [ ! -z "$(echo $CODE | grep 'LITE')" ]; then
 	CSV="$(find . -name 'IP*.CSV')"
 
-elif [ ! -z "$(echo $CODE | grep 'CSVIPV6')" ]; then
+elif [ ! -z "$(echo $CODE | grep 'IPV6')" ]; then
 	CSV="$(find . -name 'IPV6-COUNTRY*.CSV')"
 
 else
