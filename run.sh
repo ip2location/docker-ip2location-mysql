@@ -3,8 +3,24 @@
 error() { echo -e "\e[91m$1\e[m"; exit 0; }
 success() { echo -e "\e[92m$1\e[m"; }
 
-if [ "$TOKEN" == "FALSE" ] || [ "$CODE" == "FALSE" ]; then
+if [ -f /config ]; then
 	exit 0
+fi
+
+if [ "$TOKEN" == "FALSE" ]; then
+	error "Missing download token."
+fi
+
+if [ "$CODE" == "FALSE" ]; then
+	error "Missing product code."
+fi
+
+if [ "$MYSQL_PASSWORD" == "FALSE" ]; then
+	error "Missing MySQL password."
+fi
+
+if [ -z "$(echo $CODE | grep 'DB')" ]; then
+	error "Download code is invalid."
 fi
 
 echo -n " > Create directory /_tmp "
@@ -17,15 +33,15 @@ cd /_tmp
 
 echo -n " > Download IP2Location database "
 
-wget -O database.zip -q --user-agent="Docker-IP2Location/MySQL" http://www.ip2location.com/download?token=${TOKEN}\&productcode=${CODE} 2>&1
+wget -O database.zip -q --user-agent="Docker-IP2Location/MySQL" http://www.ip2location.com/download?token=${TOKEN}\&productcode=${CODE} > /dev/null 2>&1
 
-[ ! -f database.zip ] && error "[ERROR]"
+[ ! -f database.zip ] && error "[DOWNLOAD FAILED]"
 
 [ ! -z "$(grep 'NO PERMISSION' database.zip)" ] && error "[DENIED]"
 
 [ ! -z "$(grep '5 times' database.zip)" ] && error "[QUOTA EXCEEDED]"
 
-[ $(wc -c < database.zip) -lt 102400 ] && error "[ERROR]"
+[ $(wc -c < database.zip) -lt 102400 ] && error "[FILE CORRUPTED]"
 
 success "[OK]"
 
@@ -45,16 +61,13 @@ elif [ ! -z "$(echo $CODE | grep 'LITE')" ]; then
 elif [ ! -z "$(echo $CODE | grep 'CSVIPV6')" ]; then
 	CSV="$(find . -name 'IPV6-COUNTRY*.CSV')"
 
-elif [ ! -z "$(echo $CODE | grep 'PX')" ]; then
-	CSV="$(find . -name 'IP2PROXY*.CSV')"
-
 else
 	CSV="$(find . -name 'IP-COUNTRY*.CSV')"
 fi
 
-[ -z "$CSV" ] && error "[ERROR]" || success "[OK]"
+[ -z "$CSV" ] && error "[FILE CORRUPTED]" || success "[OK]"
 
-/etc/init.d/mysql start
+/etc/init.d/mysql start > /dev/null 2>&1
 
 echo -n " > [MySQL] Create database \"ip2location_database\" "
 RESPONSE="$(mysql -e 'CREATE DATABASE IF NOT EXISTS ip2location_database' 2>&1)"
@@ -161,38 +174,6 @@ case "$CODE" in
 	DB24|DB24IPV6 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`net_speed` VARCHAR(8) NOT NULL,`idd_code` VARCHAR(5) NOT NULL,`area_code` VARCHAR(30) NOT NULL,`weather_station_code` VARCHAR(10) NOT NULL,`weather_station_name` VARCHAR(128) NOT NULL,`mcc` VARCHAR(128) NULL DEFAULT NULL,`mnc` VARCHAR(128) NULL DEFAULT NULL,`mobile_brand` VARCHAR(128) NULL DEFAULT NULL,`elevation` INT(10) NOT NULL,`usage_type` VARCHAR(11) NOT NULL'
 	;;
-
-	PX1|PX1IPV6|PX1LITECSV|PX1LITECSVIPV6 )
-		FIELDS=',`country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL'
-	;;
-
-	PX2|PX2IPV6|PX2LITECSV|PX2LITECSVIPV6 )
-		FIELDS=',`proxy_type` VARCHAR(3) NOT NULL, `country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL'
-	;;
-
-	PX3|PX3IPV6|PX3LITECSV|PX3LITECSVIPV6 )
-		FIELDS=',`proxy_type` VARCHAR(3) NOT NULL, `country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL,`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL'
-	;;
-
-	PX4|PX4IPV6|PX4LITECSV|PX4LITECSVIPV6 )
-		FIELDS=',`proxy_type` VARCHAR(3) NOT NULL, `country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL,`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`isp` VARCHAR(255) NOT NULL'
-	;;
-
-	PX5|PX5IPV6|PX5LITECSV|PX5LITECSVIPV6 )
-		FIELDS=',`proxy_type` VARCHAR(3) NOT NULL, `country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL,`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL'
-	;;
-
-	PX6|PX6IPV6|PX6LITECSV|PX6LITECSVIPV6 )
-		FIELDS=',`proxy_type` VARCHAR(3) NOT NULL, `country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL,`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`usage_type` VARCHAR(11) NOT NULL'
-	;;
-
-	PX7|PX7IPV6|PX7LITECSV|PX7LITECSVIPV6 )
-		FIELDS=',`proxy_type` VARCHAR(3) NOT NULL, `country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL,`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`usage_type` VARCHAR(11) NOT NULL,`asn` VARCHAR(6) NOT NULL,`as` VARCHAR(256) NOT NULL'
-	;;
-
-	PX8|PX8IPV6|PX8LITECSV|PX8LITECSVIPV6 )
-		FIELDS=',`proxy_type` VARCHAR(3) NOT NULL, `country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL,`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`usage_type` VARCHAR(11) NOT NULL,`asn` VARCHAR(6) NOT NULL,`as` VARCHAR(256) NOT NULL,`last_seen` INT(10) NOT NULL'
-	;;
 esac
 
 if [ ! -z "$(echo $CODE | grep 'IPV6')" ]; then
@@ -221,19 +202,21 @@ RESPONSE="$(mysql ip2location_database -e 'RENAME TABLE ip2location_database_tmp
 
 [ ! -z "$(echo $RESPONSE)" ] && error "[ERROR]" || success "[OK]"
 
-DBPASS="$(< /dev/urandom tr -dc A-Za-z0-9 | head -c8)"
-
 echo " > [MySQL] Create MySQL user \"admin\""
 
-mysql -e "CREATE USER admin@'%' IDENTIFIED BY '$DBPASS'" > /dev/null 2>&1
+mysql -e "CREATE USER admin@'%' IDENTIFIED BY '$MYSQL_PASSWORD'" > /dev/null 2>&1
 mysql -e "GRANT ALL PRIVILEGES ON *.* TO admin@'%' WITH GRANT OPTION" > /dev/null 2>&1
 
 echo " > Setup completed"
 echo ""
 echo " > You can now connect to this MySQL Server using:"
 echo ""
-echo "   mysql -u admin -p$DBPASS ip2location_database"
+echo "   mysql -u admin -p$MYSQL_PASSWORD ip2location_database"
 echo ""
+
+echo "MYSQL_PASSWORD=$MYSQL_PASSWORD" > /config
+echo "TOKEN=$TOKEN" >> /config
+echo "CODE=$CODE" >> /config
 
 rm -rf /_tmp
 
