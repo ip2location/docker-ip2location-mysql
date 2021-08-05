@@ -3,8 +3,9 @@
 error() { echo -e "\e[91m$1\e[m"; exit 0; }
 success() { echo -e "\e[92m$1\e[m"; }
 
-if [ -f /config ]; then
-	exit 0
+if [ ! -f /config ]; then
+	/etc/init.d/mysql restart >/dev/null 2>&1
+	tail -f /dev/null
 fi
 
 if [ "$TOKEN" == "FALSE" ]; then
