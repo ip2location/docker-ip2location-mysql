@@ -3,7 +3,10 @@
 error() { echo -e "\e[91m$1\e[m"; exit 0; }
 success() { echo -e "\e[92m$1\e[m"; }
 
-if [ -f /config ]; then
+USER_AGENT="Mozilla/5.0+(compatible; IP2Location/MySQL-Docker; https://hub.docker.com/r/ip2location/mysql)"
+CODES=("DB1-LITE DB3-LITE DB5-LITE DB9-LITE DB11-LITE DB1 DB2 DB3 DB4 DB5 DB6 DB7 DB8 DB9 DB10 DB11 DB12 DB13 DB14 DB15 DB16 DB17 DB18 DB19 DB20 DB21 DB22 DB23 DB24 DB25")
+
+if [ -f /ip2location.conf ]; then
 	/etc/init.d/mysql restart >/dev/null 2>&1
 	tail -f /dev/null
 fi
@@ -13,16 +16,25 @@ if [ "$TOKEN" == "FALSE" ]; then
 fi
 
 if [ "$CODE" == "FALSE" ]; then
-	error "Missing product code."
+	error "Missing database code."
 fi
 
 if [ "$MYSQL_PASSWORD" == "FALSE" ]; then
-	error "Missing MySQL password."
+	MYSQL_PASSWORD="$(< /dev/urandom tr -dc _A-Z-a-z-0-9 | head -c${1:-12})"
 fi
 
-if [ -z "$(echo $CODE | grep 'DB')" ]; then
+FOUND=""
+for i in "${CODES[@]}"; do
+	if [ "$i" == "$CODE" ] ; then
+		FOUND="$CODE"
+	fi
+done
+
+if [ -z $FOUND == "" ]; then
 	error "Download code is invalid."
 fi
+
+CODE=$(echo $CODE | sed 's/-//')
 
 echo -n " > Create directory /_tmp "
 
@@ -34,39 +46,56 @@ cd /_tmp
 
 echo -n " > Download IP2Location database "
 
-wget -O database.zip -q --user-agent="Docker-IP2Location/MySQL" http://www.ip2location.com/download?token=${TOKEN}\&productcode=${CODE} > /dev/null 2>&1
+if [ "$IP_TYPE" == "IPV4" ]; then
+	wget -O ipv4.zip -q --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSV" > /dev/null 2>&1
 
-[ ! -f database.zip ] && error "[DOWNLOAD FAILED]"
+	[ ! -z "$(grep 'NO PERMISSION' database.zip)" ] && error "[DENIED]"
+	[ ! -z "$(grep '5 TIMES' database.zip)" ] && error "[QUOTA EXCEEDED]"
 
-[ ! -z "$(grep 'NO PERMISSION' database.zip)" ] && error "[DENIED]"
+	RESULT=$(unzip -t ipv4.zip >/dev/null 2>&1)
 
-[ ! -z "$(grep '5 TIMES' database.zip)" ] && error "[QUOTA EXCEEDED]"
+	[ $? -ne 0 ] && error "[FILE CORRUPTED]"
+elif [ "$IP_TYPE" == "IPV6" ]; then
+	wget -O ipv6.zip -q --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSVIPV6" > /dev/null 2>&1
 
-[ $(wc -c < database.zip) -lt 512000 ] && error "[FILE CORRUPTED]"
+	[ ! -z "$(grep 'NO PERMISSION' database.zip)" ] && error "[DENIED]"
+	[ ! -z "$(grep '5 TIMES' database.zip)" ] && error "[QUOTA EXCEEDED]"
+
+	RESULT=$(unzip -t ipv6.zip >/dev/null 2>&1)
+
+	[ $? -ne 0 ] && error "[FILE CORRUPTED]"
+else
+	wget -O ipv4.zip -q --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSV" > /dev/null 2>&1
+	wget -O ipv6.zip -q --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSVIPV6" > /dev/null 2>&1
+
+	[ ! -z "$(grep 'NO PERMISSION' ipv4.zip)" ] && error "[DENIED]"
+	[ ! -z "$(grep '5 TIMES' ipv4.zip)" ] && error "[QUOTA EXCEEDED]"
+
+	[ ! -z "$(grep 'NO PERMISSION' ipv6.zip)" ] && error "[DENIED]"
+	[ ! -z "$(grep '5 TIMES' ipv6.zip)" ] && error "[QUOTA EXCEEDED]"
+
+	RESULT=$(unzip -t ipv4.zip >/dev/null 2>&1)
+	[ $? -ne 0 ] && error "[FILE CORRUPTED]"
+
+	RESULT=$(unzip -t ipv6.zip >/dev/null 2>&1)
+	[ $? -ne 0 ] && error "[FILE CORRUPTED]"
+fi
 
 success "[OK]"
 
-echo -n " > Decompress downloaded package "
+for ZIP in $(ls | grep '.zip'); do
+	CSV=$(unzip -l $ZIP | grep '.CSV' | awk '{ print $4 }')
 
-unzip -q -o database.zip
+	echo -n " > Decompress $CSV from $ZIP "
 
-if [ "$CODE" == "DB1" ]; then
-	CSV="$(find . -name 'IPCountry.csv')"
+	unzip -jq $ZIP $CSV
 
-elif [ "$CODE" == "DB2" ]; then
-	CSV="$(find . -name 'IPISP.csv')"
+	if [ ! -f $CSV ]; then
+		error "[ERROR]"
+	fi
 
-elif [ ! -z "$(echo $CODE | grep 'LITE')" ]; then
-	CSV="$(find . -name 'IP*.CSV')"
-
-elif [ ! -z "$(echo $CODE | grep 'IPV6')" ]; then
-	CSV="$(find . -name 'IPV6-COUNTRY*.CSV')"
-
-else
-	CSV="$(find . -name 'IP-COUNTRY*.CSV')"
-fi
-
-[ -z "$CSV" ] && error "[FILE CORRUPTED]" || success "[OK]"
+	success "[OK]"
+done
 
 /etc/init.d/mysql start > /dev/null 2>&1
 
@@ -80,120 +109,116 @@ echo -n " > [MySQL] Create table \"ip2location_database_tmp\" "
 RESPONSE="$(mysql ip2location_database -e 'DROP TABLE IF EXISTS ip2location_database_tmp' 2>&1)"
 
 case "$CODE" in
-	DB1|DB1LITE|DB1IPV6|DB1LITEIPV6 )
+	DB1|DB1LITE )
 		FIELDS=''
 	;;
 
-	DB2|DB2IPV6 )
+	DB2 )
 		FIELDS=',`isp` VARCHAR(255) NOT NULL'
 	;;
 
-	DB3|DB3LITE|DB3IPV6|DB3LITEIPV6 )
+	DB3|DB3LITE )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL'
 	;;
 
-	DB4|DB4IPV6 )
+	DB4 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`isp` VARCHAR(255) NOT NULL'
 	;;
 
-	DB5|DB5LITE|DB5IPV6|DB5LITEIPV6 )
+	DB5|DB5LITE )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL'
 	;;
 
-	DB6|DB6IPV6 )
+	DB6 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL'
 	;;
 
-	DB7|DB7IPV6 )
+	DB7 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL'
 	;;
 
-	DB8|DB8IPV6 )
+	DB8 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL'
 	;;
 
-	DB9|DB9LITE|DB9IPV6|DB9LITEIPV6 )
+	DB9|DB9LITE )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL'
 	;;
 
-	DB10|DB10IPV6 )
+	DB10 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL'
 	;;
 
-	DB11|DB11LITE|DB11IPV6|DB11LITEIPV6 )
+	DB11|DB11LITE )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL'
 	;;
 
-	DB12|DB12IPV6 )
+	DB12 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL'
 	;;
 
-	DB13|DB13IPV6 )
+	DB13 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`net_speed` VARCHAR(8) NOT NULL'
 	;;
 
-	DB14|DB14IPV6 )
+	DB14 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`net_speed` VARCHAR(8) NOT NULL'
 	;;
 
-	DB15|DB15IPV6 )
+	DB15 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`idd_code` VARCHAR(5) NOT NULL,`area_code` VARCHAR(30) NOT NULL'
 	;;
 
-	DB16|DB16IPV6 )
+	DB16 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`net_speed` VARCHAR(8) NOT NULL,`idd_code` VARCHAR(5) NOT NULL,`area_code` VARCHAR(30) NOT NULL'
 	;;
 
-	DB17|DB17IPV6 )
+	DB17 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`net_speed` VARCHAR(8) NOT NULL,`weather_station_code` VARCHAR(10) NOT NULL,`weather_station_name` VARCHAR(128) NOT NULL'
 	;;
 
-	DB18|DB18IPV6 )
+	DB18 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`net_speed` VARCHAR(8) NOT NULL,`idd_code` VARCHAR(5) NOT NULL,`area_code` VARCHAR(30) NOT NULL,`weather_station_code` VARCHAR(10) NOT NULL,`weather_station_name` VARCHAR(128) NOT NULL'
 	;;
 
-	DB19|DB19IPV6 )
+	DB19 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`mcc` VARCHAR(128) NULL DEFAULT NULL,`mnc` VARCHAR(128) NULL DEFAULT NULL,`mobile_brand` VARCHAR(128) NULL DEFAULT NULL'
 	;;
 
-	DB20|DB20IPV6 )
+	DB20 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`net_speed` VARCHAR(8) NOT NULL,`idd_code` VARCHAR(5) NOT NULL,`area_code` VARCHAR(30) NOT NULL,`weather_station_code` VARCHAR(10) NOT NULL,`weather_station_name` VARCHAR(128) NOT NULL,`mcc` VARCHAR(128) NULL DEFAULT NULL,`mnc` VARCHAR(128) NULL DEFAULT NULL,`mobile_brand` VARCHAR(128) NULL DEFAULT NULL'
 	;;
 
-	DB21|DB21IPV6 )
+	DB21 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`idd_code` VARCHAR(5) NOT NULL,`area_code` VARCHAR(30) NOT NULL,`elevation` INT(10) NOT NULL'
 	;;
 
-	DB22|DB22IPV6 )
+	DB22 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`net_speed` VARCHAR(8) NOT NULL,`idd_code` VARCHAR(5) NOT NULL,`area_code` VARCHAR(30) NOT NULL,`weather_station_code` VARCHAR(10) NOT NULL,`weather_station_name` VARCHAR(128) NOT NULL,`mcc` VARCHAR(128) NULL DEFAULT NULL,`mnc` VARCHAR(128) NULL DEFAULT NULL,`mobile_brand` VARCHAR(128) NULL DEFAULT NULL,`elevation` INT(10) NOT NULL'
 	;;
 
-	DB23|DB23IPV6 )
+	DB23 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`mcc` VARCHAR(128) NULL DEFAULT NULL,`mnc` VARCHAR(128) NULL DEFAULT NULL,`mobile_brand` VARCHAR(128) NULL DEFAULT NULL,`usage_type` VARCHAR(11) NOT NULL'
 	;;
 
-	DB24|DB24IPV6 )
+	DB24 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`net_speed` VARCHAR(8) NOT NULL,`idd_code` VARCHAR(5) NOT NULL,`area_code` VARCHAR(30) NOT NULL,`weather_station_code` VARCHAR(10) NOT NULL,`weather_station_name` VARCHAR(128) NOT NULL,`mcc` VARCHAR(128) NULL DEFAULT NULL,`mnc` VARCHAR(128) NULL DEFAULT NULL,`mobile_brand` VARCHAR(128) NULL DEFAULT NULL,`elevation` INT(10) NOT NULL,`usage_type` VARCHAR(11) NOT NULL'
 	;;
 
-	DB25|DB25IPV6 )
+	DB25 )
 		FIELDS=',`region_name` VARCHAR(128) NOT NULL,`city_name` VARCHAR(128) NOT NULL,`latitude` DOUBLE NULL DEFAULT NULL,`longitude` DOUBLE NULL DEFAULT NULL,`zip_code` VARCHAR(30) NULL DEFAULT NULL,`time_zone` VARCHAR(8) NULL DEFAULT NULL,`isp` VARCHAR(255) NOT NULL,`domain` VARCHAR(128) NOT NULL,`net_speed` VARCHAR(8) NOT NULL,`idd_code` VARCHAR(5) NOT NULL,`area_code` VARCHAR(30) NOT NULL,`weather_station_code` VARCHAR(10) NOT NULL,`weather_station_name` VARCHAR(128) NOT NULL,`mcc` VARCHAR(128) NULL DEFAULT NULL,`mnc` VARCHAR(128) NULL DEFAULT NULL,`mobile_brand` VARCHAR(128) NULL DEFAULT NULL,`elevation` INT(10) NOT NULL,`usage_type` VARCHAR(11) NOT NULL,`address_type` CHAR(1) NULL DEFAULT NULL,`category` VARCHAR(10) NULL DEFAULT NULL'
 	;;
 esac
 
-if [ ! -z "$(echo $CODE | grep 'IPV6')" ]; then
-	RESPONSE="$(mysql ip2location_database -e 'CREATE TABLE ip2location_database_tmp (`ip_from` DECIMAL(39,0) UNSIGNED NOT NULL,`ip_to` DECIMAL(39,0) UNSIGNED NOT NULL,`country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL'"$FIELDS"',INDEX `idx_ip_to` (`ip_to`)) ENGINE=MyISAM' 2>&1)"
-else
-	RESPONSE="$(mysql ip2location_database -e 'CREATE TABLE ip2location_database_tmp (`ip_from` INT(10) UNSIGNED ZEROFILL NOT NULL,`ip_to` INT(10) UNSIGNED ZEROFILL NOT NULL,`country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL'"$FIELDS"',INDEX `idx_ip_to` (`ip_to`)) ENGINE=MyISAM' 2>&1)"
-fi
+RESPONSE="$(mysql ip2location_database -e 'CREATE TABLE ip2location_database_tmp (`ip_from` DECIMAL(39,0) UNSIGNED NOT NULL,`ip_to` DECIMAL(39,0) UNSIGNED NOT NULL,`country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL'"$FIELDS"',INDEX `idx_ip_to` (`ip_to`)) ENGINE=MyISAM' 2>&1)"
 
 [ ! -z "$(echo $RESPONSE)" ] && error "[ERROR]" || success "[OK]"
 
-echo -n " > [MySQL] Load CSV data into \"ip2location_database_tmp\" "
-
-RESPONSE="$(mysql ip2location_database -e 'LOAD DATA LOCAL INFILE '\'''$CSV''\'' INTO TABLE ip2location_database_tmp FIELDS TERMINATED BY '\'','\'' ENCLOSED BY '\''\"'\'' LINES TERMINATED BY '\''\r\n'\''' 2>&1)"
-
-[ ! -z "$(echo $RESPONSE)" ] && error "[ERROR]" || success "[OK]"
+for CSV in $(ls | grep '.CSV'); do
+	echo -n " > [MySQL] Load $CSV into database "
+	RESPONSE="$(mysql ip2location_database -e 'LOAD DATA LOCAL INFILE '\'''$CSV''\'' INTO TABLE ip2location_database_tmp FIELDS TERMINATED BY '\'','\'' ENCLOSED BY '\''\"'\'' LINES TERMINATED BY '\''\r\n'\''' 2>&1)"
+	[ ! -z "$(echo $RESPONSE)" ] && error "[ERROR]" || success "[OK]"
+done
 
 echo -n " > [MySQL] Drop table \"ip2location_database\" "
 
@@ -219,9 +244,10 @@ echo ""
 echo "   mysql -u admin -p$MYSQL_PASSWORD ip2location_database"
 echo ""
 
-echo "MYSQL_PASSWORD=$MYSQL_PASSWORD" > /config
-echo "TOKEN=$TOKEN" >> /config
-echo "CODE=$CODE" >> /config
+echo "MYSQL_PASSWORD=$MYSQL_PASSWORD" > /ip2location.conf
+echo "TOKEN=$TOKEN" >> /ip2location.conf
+echo "CODE=$CODE" >> /ip2location.conf
+echo "IP_TYPE=$IP_TYPE" >> /ip2location.conf
 
 rm -rf /_tmp
 
