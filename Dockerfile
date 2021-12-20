@@ -3,6 +3,7 @@ FROM debian:buster-slim
 LABEL maintainer="support@ip2location.com"
 
 # Install packages
+ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get install -y mariadb-server wget unzip
 
 # Add MySQL configuration

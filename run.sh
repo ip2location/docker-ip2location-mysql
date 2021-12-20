@@ -1,7 +1,8 @@
 #!/bin/bash
 
-error() { echo -e "\e[91m$1\e[m"; exit 0; }
-success() { echo -e "\e[92m$1\e[m"; }
+text_primary() { echo -n " $1 $(printf '\055%.0s' {1..70})" | head -c 70; echo -n ' '; }
+text_success() { printf "\e[00;92m%s\e[00m\n" "$1"; }
+text_danger() { printf "\e[00;91m%s\e[00m\n" "$1"; exit 0; }
 
 USER_AGENT="Mozilla/5.0+(compatible; IP2Location/MySQL-Docker; https://hub.docker.com/r/ip2location/mysql)"
 CODES=("DB1-LITE DB3-LITE DB5-LITE DB9-LITE DB11-LITE DB1 DB2 DB3 DB4 DB5 DB6 DB7 DB8 DB9 DB10 DB11 DB12 DB13 DB14 DB15 DB16 DB17 DB18 DB19 DB20 DB21 DB22 DB23 DB24 DB25")
@@ -11,13 +12,9 @@ if [ -f /ip2location.conf ]; then
 	tail -f /dev/null
 fi
 
-if [ "$TOKEN" == "FALSE" ]; then
-	error "Missing download token."
-fi
+[ "$TOKEN" == "FALSE" ] && text_danger "Missing download token."
 
-if [ "$CODE" == "FALSE" ]; then
-	error "Missing database code."
-fi
+[ "$CODE" == "FALSE" ] && text_danger "Missing database code."
 
 if [ "$MYSQL_PASSWORD" == "FALSE" ]; then
 	MYSQL_PASSWORD="$(< /dev/urandom tr -dc _A-Z-a-z-0-9 | head -c${1:-12})"
@@ -31,80 +28,74 @@ for i in "${CODES[@]}"; do
 done
 
 if [ -z $FOUND == "" ]; then
-	error "Download code is invalid."
+	text_danger "Download code is invalid."
 fi
 
 CODE=$(echo $CODE | sed 's/-//')
 
-echo -n " > Create directory /_tmp "
+rm -rf /_tmp && mkdir /_tmp && cd /_tmp
 
-mkdir /_tmp
-
-[ ! -d /_tmp ] && error "[ERROR]" || success "[OK]"
-
-cd /_tmp
-
-echo -n " > Download IP2Location database "
+text_primary " > Download IP2Location database"
 
 if [ "$IP_TYPE" == "IPV4" ]; then
-	wget -O ipv4.zip -q --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSV" > /dev/null 2>&1
+	wget -qO ipv4.zip --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSV" > /dev/null 2>&1
 
-	[ ! -z "$(grep 'NO PERMISSION' database.zip)" ] && error "[DENIED]"
-	[ ! -z "$(grep '5 TIMES' database.zip)" ] && error "[QUOTA EXCEEDED]"
+	[ ! -z "$(grep 'NO PERMISSION' database.zip)" ] && text_danger "[DENIED]"
+	[ ! -z "$(grep '5 TIMES' database.zip)" ] && text_danger "[QUOTA EXCEEDED]"
 
 	RESULT=$(unzip -t ipv4.zip >/dev/null 2>&1)
 
-	[ $? -ne 0 ] && error "[FILE CORRUPTED]"
+	[ $? -ne 0 ] && text_danger "[FILE CORRUPTED]"
 elif [ "$IP_TYPE" == "IPV6" ]; then
-	wget -O ipv6.zip -q --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSVIPV6" > /dev/null 2>&1
+	wget -qO ipv6.zip --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSVIPV6" > /dev/null 2>&1
 
-	[ ! -z "$(grep 'NO PERMISSION' database.zip)" ] && error "[DENIED]"
-	[ ! -z "$(grep '5 TIMES' database.zip)" ] && error "[QUOTA EXCEEDED]"
+	[ ! -z "$(grep 'NO PERMISSION' database.zip)" ] && text_danger "[DENIED]"
+	[ ! -z "$(grep '5 TIMES' database.zip)" ] && text_danger "[QUOTA EXCEEDED]"
 
 	RESULT=$(unzip -t ipv6.zip >/dev/null 2>&1)
 
-	[ $? -ne 0 ] && error "[FILE CORRUPTED]"
+	[ $? -ne 0 ] && text_danger "[FILE CORRUPTED]"
 else
-	wget -O ipv4.zip -q --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSV" > /dev/null 2>&1
-	wget -O ipv6.zip -q --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSVIPV6" > /dev/null 2>&1
+	wget -qO ipv4.zip --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSV" > /dev/null 2>&1
+	wget -qO ipv6.zip --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSVIPV6" > /dev/null 2>&1
 
-	[ ! -z "$(grep 'NO PERMISSION' ipv4.zip)" ] && error "[DENIED]"
-	[ ! -z "$(grep '5 TIMES' ipv4.zip)" ] && error "[QUOTA EXCEEDED]"
+	[ ! -z "$(grep 'NO PERMISSION' ipv4.zip)" ] && text_danger "[DENIED]"
+	[ ! -z "$(grep '5 TIMES' ipv4.zip)" ] && text_danger "[QUOTA EXCEEDED]"
 
-	[ ! -z "$(grep 'NO PERMISSION' ipv6.zip)" ] && error "[DENIED]"
-	[ ! -z "$(grep '5 TIMES' ipv6.zip)" ] && error "[QUOTA EXCEEDED]"
+	[ ! -z "$(grep 'NO PERMISSION' ipv6.zip)" ] && text_danger "[DENIED]"
+	[ ! -z "$(grep '5 TIMES' ipv6.zip)" ] && text_danger "[QUOTA EXCEEDED]"
 
 	RESULT=$(unzip -t ipv4.zip >/dev/null 2>&1)
-	[ $? -ne 0 ] && error "[FILE CORRUPTED]"
+	[ $? -ne 0 ] && text_danger "[FILE CORRUPTED]"
 
 	RESULT=$(unzip -t ipv6.zip >/dev/null 2>&1)
-	[ $? -ne 0 ] && error "[FILE CORRUPTED]"
+	[ $? -ne 0 ] && text_danger "[FILE CORRUPTED]"
 fi
 
-success "[OK]"
+text_success "[OK]"
 
 for ZIP in $(ls | grep '.zip'); do
 	CSV=$(unzip -l $ZIP | grep '.CSV' | awk '{ print $4 }')
 
-	echo -n " > Decompress $CSV from $ZIP "
+	text_primary " > Decompress $CSV from $ZIP"
 
-	unzip -jq $ZIP $CSV
+	unzip -oq $ZIP $CSV
 
 	if [ ! -f $CSV ]; then
-		error "[ERROR]"
+		text_danger "[ERROR]"
 	fi
 
-	success "[OK]"
+	text_success "[OK]"
 done
 
 /etc/init.d/mysql start > /dev/null 2>&1
 
-echo -n " > [MySQL] Create database \"ip2location_database\" "
+text_primary " > [MySQL] Create database \"ip2location_database\""
 RESPONSE="$(mysql -e 'CREATE DATABASE IF NOT EXISTS ip2location_database' 2>&1)"
 
-[ ! -z "$(echo $RESPONSE)" ] && error "[$RESPONSE]" || success "[OK]"
+[ ! -z "$(echo $RESPONSE)" ] && text_danger "[$RESPONSE]" || text_success "[OK]"
 
-echo -n " > [MySQL] Create table \"ip2location_database_tmp\" "
+text_primary " > [MySQL] Create table \"ip2location_database_tmp\""
 
 RESPONSE="$(mysql ip2location_database -e 'DROP TABLE IF EXISTS ip2location_database_tmp' 2>&1)"
 
@@ -212,25 +203,25 @@ esac
 
 RESPONSE="$(mysql ip2location_database -e 'CREATE TABLE ip2location_database_tmp (`ip_from` DECIMAL(39,0) UNSIGNED NOT NULL,`ip_to` DECIMAL(39,0) UNSIGNED NOT NULL,`country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL'"$FIELDS"',INDEX `idx_ip_to` (`ip_to`)) ENGINE=MyISAM' 2>&1)"
 
-[ ! -z "$(echo $RESPONSE)" ] && error "[ERROR]" || success "[OK]"
+[ ! -z "$(echo $RESPONSE)" ] && text_danger "[ERROR]" || text_success "[OK]"
 
 for CSV in $(ls | grep '.CSV'); do
-	echo -n " > [MySQL] Load $CSV into database "
+	text_primary " > [MySQL] Load $CSV into database"
 	RESPONSE="$(mysql ip2location_database -e 'LOAD DATA LOCAL INFILE '\'''$CSV''\'' INTO TABLE ip2location_database_tmp FIELDS TERMINATED BY '\'','\'' ENCLOSED BY '\''\"'\'' LINES TERMINATED BY '\''\r\n'\''' 2>&1)"
-	[ ! -z "$(echo $RESPONSE)" ] && error "[ERROR]" || success "[OK]"
+	[ ! -z "$(echo $RESPONSE)" ] && text_danger "[ERROR]" || text_success "[OK]"
 done
 
-echo -n " > [MySQL] Drop table \"ip2location_database\" "
+text_primary " > [MySQL] Drop table \"ip2location_database\""
 
 RESPONSE="$(mysql ip2location_database -e 'DROP TABLE IF EXISTS ip2location_database' 2>&1)"
 
-[ ! -z "$(echo $RESPONSE)" ] && error "[ERROR]" || success "[OK]"
+[ ! -z "$(echo $RESPONSE)" ] && text_danger "[ERROR]" || text_success "[OK]"
 
-echo -n " > [MySQL] Rename table \"ip2location_database_tmp\" to \"ip2location_database\" "
+text_primary " > [MySQL] Rename table \"ip2location_database_tmp\" to \"ip2location_database\""
 
 RESPONSE="$(mysql ip2location_database -e 'RENAME TABLE ip2location_database_tmp TO ip2location_database' 2>&1)"
 
-[ ! -z "$(echo $RESPONSE)" ] && error "[ERROR]" || success "[OK]"
+[ ! -z "$(echo $RESPONSE)" ] && text_danger "[ERROR]" || text_success "[OK]"
 
 echo " > [MySQL] Create MySQL user \"admin\""
 
