@@ -75,7 +75,7 @@ fi
 text_success "[OK]"
 
 for ZIP in $(ls | grep '.zip'); do
-	CSV=$(unzip -l $ZIP | grep '.CSV' | awk '{ print $4 }')
+	CSV=$(unzip -l $ZIP | grep -Eo 'IP(V6)?-.*CSV')
 
 	text_primary " > Decompress $CSV from $ZIP"
 
