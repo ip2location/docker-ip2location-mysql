@@ -8,7 +8,7 @@ USER_AGENT="Mozilla/5.0+(compatible; IP2Location/MySQL-Docker; https://hub.docke
 CODES=("DB1-LITE DB3-LITE DB5-LITE DB9-LITE DB11-LITE DB1 DB2 DB3 DB4 DB5 DB6 DB7 DB8 DB9 DB10 DB11 DB12 DB13 DB14 DB15 DB16 DB17 DB18 DB19 DB20 DB21 DB22 DB23 DB24 DB25")
 
 if [ -f /ip2location.conf ]; then
-	/etc/init.d/mysql restart >/dev/null 2>&1
+	/etc/init.d/mariadb restart >/dev/null 2>&1
 	tail -f /dev/null
 fi
 
@@ -75,7 +75,7 @@ fi
 text_success "[OK]"
 
 for ZIP in $(ls | grep '.zip'); do
-	CSV=$(unzip -l $ZIP | grep -Eo 'IP(V6)?-.*CSV')
+	CSV=$(unzip -l $ZIP | sort -nr | grep -Eio 'IP(V6)?.*CSV' | head -n 1)
 
 	text_primary " > Decompress $CSV from $ZIP"
 
@@ -88,16 +88,16 @@ for ZIP in $(ls | grep '.zip'); do
 	text_success "[OK]"
 done
 
-/etc/init.d/mysql start > /dev/null 2>&1
+/etc/init.d/mariadb start > /dev/null 2>&1
 
 text_primary " > [MySQL] Create database \"ip2location_database\""
-RESPONSE="$(mysql -e 'CREATE DATABASE IF NOT EXISTS ip2location_database' 2>&1)"
+RESPONSE="$(mariadb -e 'CREATE DATABASE IF NOT EXISTS ip2location_database' 2>&1)"
 
 [ ! -z "$(echo $RESPONSE)" ] && text_danger "[$RESPONSE]" || text_success "[OK]"
 
 text_primary " > [MySQL] Create table \"ip2location_database_tmp\""
 
-RESPONSE="$(mysql ip2location_database -e 'DROP TABLE IF EXISTS ip2location_database_tmp' 2>&1)"
+RESPONSE="$(mariadb ip2location_database -e 'DROP TABLE IF EXISTS ip2location_database_tmp' 2>&1)"
 
 case "$CODE" in
 	DB1|DB1LITE )
@@ -201,38 +201,38 @@ case "$CODE" in
 	;;
 esac
 
-RESPONSE="$(mysql ip2location_database -e 'CREATE TABLE ip2location_database_tmp (`ip_from` DECIMAL(39,0) UNSIGNED NOT NULL,`ip_to` DECIMAL(39,0) UNSIGNED NOT NULL,`country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL'"$FIELDS"',INDEX `idx_ip_to` (`ip_to`)) ENGINE=MyISAM' 2>&1)"
+RESPONSE="$(mariadb ip2location_database -e 'CREATE TABLE ip2location_database_tmp (`ip_from` DECIMAL(39,0) UNSIGNED NOT NULL,`ip_to` DECIMAL(39,0) UNSIGNED NOT NULL,`country_code` CHAR(2) NOT NULL,`country_name` VARCHAR(64) NOT NULL'"$FIELDS"',INDEX `idx_ip_to` (`ip_to`)) ENGINE=MyISAM' 2>&1)"
 
 [ ! -z "$(echo $RESPONSE)" ] && text_danger "[ERROR]" || text_success "[OK]"
 
-for CSV in $(ls | grep '.CSV'); do
+for CSV in $(ls | grep -i '.CSV'); do
 	text_primary " > [MySQL] Load $CSV into database"
-	RESPONSE="$(mysql ip2location_database -e 'LOAD DATA LOCAL INFILE '\'''$CSV''\'' INTO TABLE ip2location_database_tmp FIELDS TERMINATED BY '\'','\'' ENCLOSED BY '\''\"'\'' LINES TERMINATED BY '\''\r\n'\''' 2>&1)"
+	RESPONSE="$(mariadb ip2location_database -e 'LOAD DATA LOCAL INFILE '\'''$CSV''\'' INTO TABLE ip2location_database_tmp FIELDS TERMINATED BY '\'','\'' ENCLOSED BY '\''\"'\'' LINES TERMINATED BY '\''\r\n'\''' 2>&1)"
 	[ ! -z "$(echo $RESPONSE)" ] && text_danger "[ERROR]" || text_success "[OK]"
 done
 
 text_primary " > [MySQL] Drop table \"ip2location_database\""
 
-RESPONSE="$(mysql ip2location_database -e 'DROP TABLE IF EXISTS ip2location_database' 2>&1)"
+RESPONSE="$(mariadb ip2location_database -e 'DROP TABLE IF EXISTS ip2location_database' 2>&1)"
 
 [ ! -z "$(echo $RESPONSE)" ] && text_danger "[ERROR]" || text_success "[OK]"
 
 text_primary " > [MySQL] Rename table \"ip2location_database_tmp\" to \"ip2location_database\""
 
-RESPONSE="$(mysql ip2location_database -e 'RENAME TABLE ip2location_database_tmp TO ip2location_database' 2>&1)"
+RESPONSE="$(mariadb ip2location_database -e 'RENAME TABLE ip2location_database_tmp TO ip2location_database' 2>&1)"
 
 [ ! -z "$(echo $RESPONSE)" ] && text_danger "[ERROR]" || text_success "[OK]"
 
 echo " > [MySQL] Create MySQL user \"admin\""
 
-mysql -e "CREATE USER admin@'%' IDENTIFIED BY '$MYSQL_PASSWORD'" > /dev/null 2>&1
-mysql -e "GRANT ALL PRIVILEGES ON *.* TO admin@'%' WITH GRANT OPTION" > /dev/null 2>&1
+mariadb -e "CREATE USER admin@'%' IDENTIFIED BY '$MYSQL_PASSWORD'" > /dev/null 2>&1
+mariadb -e "GRANT ALL PRIVILEGES ON *.* TO admin@'%' WITH GRANT OPTION" > /dev/null 2>&1
 
 echo " > Setup completed"
 echo ""
 echo " > You can now connect to this MySQL Server using:"
 echo ""
-echo "   mysql -u admin -p$MYSQL_PASSWORD ip2location_database"
+echo "   mariadb -u admin -p$MYSQL_PASSWORD ip2location_database"
 echo ""
 
 echo "MYSQL_PASSWORD=$MYSQL_PASSWORD" > /ip2location.conf

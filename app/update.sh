@@ -54,7 +54,7 @@ fi
 text_success "[OK]"
 
 for ZIP in $(ls | grep '.zip'); do
-	CSV=$(unzip -l $ZIP | grep -Eo 'IP(V6)?-.*CSV')
+	CSV=$(unzip -l $ZIP | sort -nr | grep -Eio 'IP(V6)?.*CSV' | head -n 1)
 
 	text_primary " > Decompress $CSV from $ZIP"
 
@@ -73,7 +73,7 @@ RESPONSE="$(mysql ip2location_database -e 'DROP TABLE IF EXISTS ip2location_data
 
 [ ! -z "$(echo $RESPONSE)" ] && text_danger "[ERROR]" || text_success "[OK]"
 
-for CSV in $(ls | grep '.CSV'); do
+for CSV in $(ls | grep -i '.CSV'); do
 	text_primary " > [MySQL] Load $CSV into database"
 	RESPONSE="$(mysql ip2location_database -e 'LOAD DATA LOCAL INFILE '\'''$CSV''\'' INTO TABLE ip2location_database_tmp FIELDS TERMINATED BY '\'','\'' ENCLOSED BY '\''\"'\'' LINES TERMINATED BY '\''\r\n'\''' 2>&1)"
 	[ ! -z "$(echo $RESPONSE)" ] && text_danger "[ERROR]" || text_success "[OK]"
