@@ -40,8 +40,8 @@ text_primary " > Download IP2Location database"
 if [ "$IP_TYPE" == "IPV4" ]; then
 	wget -qO ipv4.zip --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSV" > /dev/null 2>&1
 
-	[ ! -z "$(grep 'NO PERMISSION' database.zip)" ] && text_danger "[DENIED]"
-	[ ! -z "$(grep '5 TIMES' database.zip)" ] && text_danger "[QUOTA EXCEEDED]"
+	[ ! -z "$(grep 'NO PERMISSION' ipv4.zip)" ] && text_danger "[DENIED]"
+	[ ! -z "$(grep '5 TIMES' ipv4.zip)" ] && text_danger "[QUOTA EXCEEDED]"
 
 	RESULT=$(unzip -t ipv4.zip >/dev/null 2>&1)
 
@@ -49,8 +49,8 @@ if [ "$IP_TYPE" == "IPV4" ]; then
 elif [ "$IP_TYPE" == "IPV6" ]; then
 	wget -qO ipv6.zip --user-agent="$USER_AGENT" "https://www.ip2location.com/download?token=${TOKEN}&code=${CODE}CSVIPV6" > /dev/null 2>&1
 
-	[ ! -z "$(grep 'NO PERMISSION' database.zip)" ] && text_danger "[DENIED]"
-	[ ! -z "$(grep '5 TIMES' database.zip)" ] && text_danger "[QUOTA EXCEEDED]"
+	[ ! -z "$(grep 'NO PERMISSION' ipv6.zip)" ] && text_danger "[DENIED]"
+	[ ! -z "$(grep '5 TIMES' ipv6.zip)" ] && text_danger "[QUOTA EXCEEDED]"
 
 	RESULT=$(unzip -t ipv6.zip >/dev/null 2>&1)
 
