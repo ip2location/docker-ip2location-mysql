@@ -21,7 +21,7 @@ This is a pre-configured, ready-to-run MySQL server with IP2Location Geolocation
 
    * Free Database - DB1-LITE, DB3-LITE, DB5-LITE, DB9-LITE, DB11-LITE
 
-   * Commercial Database - DB1, DB2, DB3, DB4, DB5, DB6, DB7, DB8, DB9, DB10, DB11, DB12, DB13, DB14, DB15, DB16, DB17, DB18, DB19, DB20, DB21, DB22, DB23, DB24, DB25
+   * Commercial Database - DB1, DB2, DB3, DB4, DB5, DB6, DB7, DB8, DB9, DB10, DB11, DB12, DB13, DB14, DB15, DB16, DB17, DB18, DB19, DB20, DB21, DB22, DB23, DB24, DB25, DB26
      
 
    IP_TYPE - (Optional) Download IPv4, IPv6 or both database. Script will download both database by default.
